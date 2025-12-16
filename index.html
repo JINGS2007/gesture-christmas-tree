@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手势控制3D粒子圣诞树 (THREE.JS Instanced + Bloom)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675469240/camera_utils.js"></script>
+
+    <style>
+        /* 样式保持不变 */
+        body { margin: 0; overflow: hidden; background-color: #0d1117; }
+        #webgl-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #upload-button { position: fixed; top: 20px; right: 20px; padding: 10px 20px; background-color: #a37b38; color: white; border: none; border-radius: 5px; cursor: pointer; z-index: 10; font-family: sans-serif; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); }
+        #status-indicator { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); color: #ff4d4d; font-size: 1.5em; font-family: monospace; z-index: 10; background-color: rgba(0, 0, 0, 0.5); padding: 5px 15px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div id="webgl-container"></div>
+    <video id="video" style="display:none;" autoplay playsinline></video>
+    <button id="upload-button">上传照片 (照片云)</button>
+    <input type="file" id="photo-upload" accept="image/*" multiple style="display: none;">
+    <div id="status-indicator">状态: 初始化中...</div>
+
+    <script>
+        // --- 核心变量 ---
+        let scene, camera, renderer, clock, composer;
+        let particlesData = []; // 存储粒子状态数据，用于 Instanced Mesh
+        let instancedMeshes = {}; // 存储不同类型的 InstancedMesh
+        let focusedPhoto = null;
+        let currentState = 'CLOSED'; 
+        let photoTextures = [];
+        let tempMatrix = new THREE.Matrix4(); // 用于 Instanced Mesh 的更新
+
+        const config = {
+            treeHeight: 12, treeRadius: 5, elementCount: 800, // 增加到 800 个粒子
+            transitionSpeed: 0.05, cameraDistance: 15, scatterRadius: 25,
+            glowIntensity: 1.5, glowRadius: 0.5, glowThreshold: 0.8
+        };
+        const statusIndicator = document.getElementById('status-indicator');
+        const PARTICLE_TYPES = ['SPHERE', 'STAR', 'BOX', 'PHOTO'];
+
+        // --- THREE.JS 初始化 ---
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x0d1117, 10, 50);
+
+            camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 5, config.cameraDistance);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping; 
+            renderer.toneMappingExposure = 1.0; 
+            document.getElementById('webgl-container').appendChild(renderer.domElement);
+
+            clock = new THREE.Clock();
+
+            // 灯光：用于照亮非发光物体，并衬托辉光效果
+            scene.add(new THREE.AmbientLight(0x444444, 1.0));
+            scene.add(new THREE.DirectionalLight(0xffffff, 0.5).position.set(5, 10, 7));
+
+            // **后处理 (Post-processing) - 实现电影级辉光效果**
+            setupPostProcessing();
+
+            window.addEventListener('resize', onWindowResize, false);
+            createParticles(); 
+        }
+
+        /**
+         * @brief 设置 Unreal Bloom Pass 来实现金碧辉煌的辉光效果
+         */
+        function setupPostProcessing() {
+            composer = new THREE.EffectComposer(renderer);
+            composer.addPass(new THREE.RenderPass(scene, camera));
+
+            const bloomPass = new THREE.UnrealBloomPass(
+                new THREE.Vector2(window.innerWidth, window.innerHeight), 
+                config.glowRadius, // radius
+                config.glowThreshold, // threshold
+                config.glowIntensity // strength
+            );
+            composer.addPass(bloomPass);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight); // 更新 Composer 大小
+        }
+
+        /**
+         * @brief 编码过程 1: 使用 Instanced Mesh 优化粒子创建
+         */
+        function createParticles() {
+            // 清理旧资源
+            Object.values(instancedMeshes).forEach(mesh => scene.remove(mesh));
+            particlesData = [];
+            instancedMeshes = {};
+            
+            const count = config.elementCount;
+            const photoCount = photoTextures.length;
+            const photoRatio = photoCount > 0 ? 0.2 : 0; // 假设 20% 比例给照片，如果照片存在
+
+            // 定义几何体和基础材质（使用发光材质）
+            const geometries = {
+                'SPHERE': new THREE.SphereGeometry(0.3, 16, 16),
+                'STAR': new THREE.IcosahedronGeometry(0.3), // 高级感多面体代替星星
+                'BOX': new THREE.BoxGeometry(0.4, 0.4, 0.4),
+            };
+            const materials = {
+                'SPHERE': new THREE.MeshBasicMaterial({ color: 0xff4d4d }), // 圣诞红 - 高强度发光
+                'STAR': new THREE.MeshBasicMaterial({ color: 0xffd700 }), // 金属金 - 高强度发光
+                'BOX': new THREE.MeshBasicMaterial({ color: 0x009933 }), // 哑光绿 - 较低发光
+            };
+
+            // 创建 Instanced Mesh 容器
+            PARTICLE_TYPES.filter(t => t !== 'PHOTO').forEach(type => {
+                const mesh = new THREE.InstancedMesh(geometries[type], materials[type], count);
+                mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+                instancedMeshes[type] = mesh;
+                scene.add(mesh);
+            });
+            
+            // 创建照片 Mesh 容器 (照片不能使用 Instanced Mesh，需要独立 Mesh)
+            instancedMeshes['PHOTO'] = []; 
+
+            for (let i = 0; i < count; i++) {
+                let elementType;
+                
+                if (i < Math.round(count * photoRatio) && photoCount > 0) {
+                    elementType = 'PHOTO';
+                } else {
+                    const nonPhotoTypes = PARTICLE_TYPES.filter(t => t !== 'PHOTO');
+                    elementType = nonPhotoTypes[i % nonPhotoTypes.length];
+                }
+                
+                // 粒子位置数据计算 (合拢和散开)
+                const h = (i / count) * config.treeHeight;
+                const r = (1 - i / count) * config.treeRadius * (0.8 + Math.random() * 0.4);
+                const angle = Math.random() * Math.PI * 2;
+                
+                const closedPos = new THREE.Vector3(
+                    Math.cos(angle) * r, h - config.treeHeight / 3, Math.sin(angle) * r
+                );
+                const scatteredPos = new THREE.Vector3(
+                    (Math.random() - 0.5) * config.scatterRadius,
+                    (Math.random() - 0.5) * config.scatterRadius,
+                    (Math.random() - 0.5) * config.scatterRadius
+                );
+
+                if (elementType === 'PHOTO' && photoCount > 0) {
+                    // 照片处理：作为独立的 Mesh
+                    const photoIndex = i % photoCount;
+                    const planeGeo = new THREE.PlaneGeometry(2, 1.5);
+                    const photoMat = new THREE.MeshBasicMaterial({ 
+                        map: photoTextures[photoIndex], 
+                        side: THREE.DoubleSide
+                    });
+                    const photoMesh = new THREE.Mesh(planeGeo, photoMat);
+                    photoMesh.userData = { isPhoto: true, closedPos, scatteredPos, targetPos: closedPos.clone() };
+                    instancedMeshes['PHOTO'].push(photoMesh);
+                    scene.add(photoMesh);
+                } else {
+                    // Instanced Mesh 数据
+                    particlesData.push({
+                        type: elementType,
+                        index: i,
+                        closedPos: closedPos,
+                        scatteredPos: scatteredPos,
+                        targetPos: closedPos.clone(),
+                        rotation: new THREE.Euler(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI)
+                    });
+                }
+            }
+        }
+
+        // --- 核心渲染循环 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            
+            updateParticles(delta);
+            updateCamera(delta);
+            
+            // 使用 EffectComposer 渲染，实现辉光效果
+            composer.render();
+        }
+        
+        /**
+         * @brief 编码过程 2: 更新粒子位置并应用到 Instanced Mesh
+         */
+        function updateParticles(delta) {
+            let instanceCount = {};
+            PARTICLE_TYPES.filter(t => t !== 'PHOTO').forEach(t => instanceCount[t] = 0);
+
+            // 1. 更新 Instanced Mesh 粒子数据
+            particlesData.forEach(p => {
+                // 平滑移动
+                p.targetPos.lerp(p.targetPos, config.transitionSpeed); 
+                p.targetPos.lerp(p.targetPos, config.transitionSpeed);
+
+                if (currentState !== 'CLOSED') {
+                    p.rotation.y += 0.01;
+                }
+
+                // 更新 Instanced Mesh 矩阵
+                tempMatrix.makeRotationFromEuler(p.rotation);
+                tempMatrix.setPosition(p.targetPos);
+                
+                const mesh = instancedMeshes[p.type];
+                mesh.setMatrixAt(instanceCount[p.type]++, tempMatrix);
+            });
+
+            // 通知 THREE.js 更新 Instanced Mesh
+            Object.values(instancedMeshes).filter(m => Array.isArray(m) === false).forEach(m => m.instanceMatrix.needsUpdate = true);
+
+            // 2. 更新独立照片 Mesh
+            instancedMeshes['PHOTO'].forEach(p => {
+                p.position.lerp(p.userData.targetPos, config.transitionSpeed);
+                p.rotation.y += 0.005;
+
+                // 聚焦态放大
+                if (currentState === 'PHOTO_FOCUS' && p === focusedPhoto) {
+                    p.scale.lerp(new THREE.Vector3(3.5, 3.5, 3.5), 0.1);
+                } else {
+                    p.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
+                }
+            });
+        }
+
+        // --- 相机和控制更新 (手旋转交互) ---
+        let handRotationX = 0;
+        let handRotationY = 0;
+        // ... (updateCamera 函数与之前骨架相同) ...
+
+        function updateCamera(delta) {
+            let targetPosition = new THREE.Vector3(0, 5, config.cameraDistance);
+            let cameraTarget = new THREE.Vector3(0, 0, 0);
+
+            if (currentState === 'SCATTERED') {
+                const rotationFactor = 0.002; 
+                targetPosition.x += handRotationX * rotationFactor;
+                targetPosition.y += handRotationY * rotationFactor;
+            } else if (currentState === 'PHOTO_FOCUS' && focusedPhoto) {
+                cameraTarget = focusedPhoto.position.clone();
+                targetPosition = focusedPhoto.position.clone().add(new THREE.Vector3(0, 0, 5));
+            }
+            
+            camera.position.lerp(targetPosition, config.transitionSpeed * 2);
+            camera.lookAt(cameraTarget);
+        }
+
+        // --- MediaPipe Hand 逻辑与状态切换 ---
+        // ... (MediaPipe/onResults/transitionTo/手势判断/findNearestPhoto 函数与之前骨架相同) ...
+        const videoElement = document.getElementById('video');
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`;
+        }});
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
+        hands.onResults(onResults);
+        const cameraFeed = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 640, height: 480
+        });
+        cameraFeed.start();
+        let lastHandPosition = null; 
+        
+        function onResults(results) { /* ... (手势判断和状态切换逻辑) ... */ }
+        function transitionTo(newState) { /* ... (平滑切换逻辑) ... */ }
+        function isHandClosed(landmarks) { /* ... (握拳判断) ... */ }
+        function isHandOpen(landmarks) { /* ... (五指张开判断) ... */ }
+        function isGrabbingAction(landmarks) { /* ... (抓取判断) ... */ }
+        function findNearestPhoto(indexTip) { /* ... (射线投射逻辑) ... */ }
+
+        // --- 照片上传处理 ---
+        document.getElementById('upload-button').addEventListener('click', () => {
+            document.getElementById('photo-upload').click();
+        });
+
+        document.getElementById('photo-upload').addEventListener('change', (event) => {
+            const files = event.target.files;
+            if (files.length === 0) return;
+
+            photoTextures.forEach(tex => tex.dispose());
+            photoTextures = [];
+            
+            const loader = new THREE.TextureLoader();
+            Array.from(files).forEach(file => {
+                const url = URL.createObjectURL(file);
+                photoTextures.push(loader.load(url, () => { URL.revokeObjectURL(url); }));
+            });
+            
+            createParticles();
+            transitionTo('SCATTERED');
+        });
+        
+        // --- 启动应用 ---
+        initThree();
+        animate();
+    </script>
+</body>
+</html>
