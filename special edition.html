@@ -56,6 +56,9 @@
         #photo-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0); z-index: 500; transition: 0.4s; }
         #photo-modal.active { transform: translate(-50%, -50%) scale(1); }
         #photo-modal img { max-width: 80vw; max-height: 70vh; border: 5px solid white; border-radius: 8px; }
+        
+        /* 隐藏 YouTube 播放器但保持它运行 */
+        #yt-player { position: fixed; left: -9999px; }
     </style>
 </head>
 <body class="bg-deep">
@@ -67,6 +70,8 @@
         <p style="color:#666;">🖐 张开手爆炸 | ✊ 握拳还原</p>
         <button class="start-btn" id="btn-start">开启 3D 魔法之旅</button>
     </div>
+
+    <div id="yt-player"></div>
 
     <div id="video-container"><video id="input_video"></video></div>
 
@@ -109,7 +114,7 @@
 
         <div class="control-group">
             <label>音乐音量</label>
-            <input type="range" id="vol-slider" min="0" max="1" step="0.1" value="0.4">
+            <input type="range" id="vol-slider" min="0" max="100" step="1" value="40">
         </div>
     </div>
 
@@ -118,9 +123,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
 
     <script>
-        let scene, camera, renderer, treeGroup, star, audio, snowParticles;
+        let scene, camera, renderer, treeGroup, star, player, snowParticles;
         let decorMeshes = [], photoUrls = [];
         const state = { 
             explosion: 0, 
@@ -131,8 +137,24 @@
             photoActive: false 
         };
 
-        audio = new Audio('https://open.spotify.com/artist/5K8O23PnpzxuFYAxnAqkKl'); 
-        audio.loop = true;
+        // 初始化 YouTube 播放器
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('yt-player', {
+                height: '0',
+                width: '0',
+                videoId: 'UMfuUX8OdZc',
+                playerVars: {
+                    'autoplay': 1,
+                    'list': 'RDUMfuUX8OdZc',
+                    'loop': 1
+                },
+                events: {
+                    'onReady': (event) => {
+                        event.target.setVolume(40);
+                    }
+                }
+            });
+        }
 
         document.getElementById('btn-start').onclick = () => {
             document.getElementById('start-screen').style.display = 'none';
@@ -140,7 +162,11 @@
             document.getElementById('video-container').style.display = 'block';
             initThree();
             startTracking();
-            audio.play().catch(() => {});
+            
+            // 用户点击后触发播放
+            if (player && player.playVideo) {
+                player.playVideo();
+            }
         };
 
         function initThree() {
@@ -231,7 +257,9 @@
                 state.snowSpeed = parseFloat(e.target.value);
                 document.getElementById('snow-val').innerText = e.target.value;
             };
-            document.getElementById('vol-slider').oninput = (e) => audio.volume = e.target.value;
+            document.getElementById('vol-slider').oninput = (e) => {
+                if(player && player.setVolume) player.setVolume(e.target.value);
+            };
             
             document.getElementById('file-in').onchange = (e) => {
                 Array.from(e.target.files).forEach(file => {
