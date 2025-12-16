@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Magic Christmas Pro - Spiral & Music Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+    <style>
+        :root { --panel-bg: rgba(15, 15, 15, 0.9); --accent: #ffd700; --cyan: #00e5ff; }
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Segoe UI', sans-serif; color: white; }
+        
+        body.bg-black { background: #000; }
+        body.bg-deep { background: radial-gradient(circle at center, #050a1f 0%, #000 100%); }
+        body.bg-warm { background: radial-gradient(circle at center, #240b0b 0%, #000 100%); }
+        body.bg-aurora { background: linear-gradient(to bottom, #002d5c, #000); }
+
+        #main-header {
+            position: absolute; top: 15px; width: 100%; text-align: center;
+            font-family: 'Great Vibes', cursive; font-size: clamp(2rem, 5vw, 4rem);
+            background: linear-gradient(to bottom, #fff, #ffd700);
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 10px rgba(255,215,0,0.5));
+            z-index: 50; pointer-events: none;
+        }
+
+        #ui-panel {
+            position: fixed; top: 20px; right: 20px; width: 280px; background: var(--panel-bg);
+            padding: 15px; border-radius: 20px; z-index: 100; border: 1px solid rgba(255,255,255,0.1);
+            display: none; backdrop-filter: blur(15px); max-height: 90vh; overflow-y: auto;
+        }
+
+        .panel-section { border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 10px; }
+        .section-title { color: var(--accent); font-size: 14px; font-weight: bold; margin-bottom: 8px; display: block;}
+
+        /* 音乐播放器样式 */
+        .music-ctrl { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
+        .m-btn { background: #333; border: none; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .m-btn:hover { background: #444; }
+        .loop-active { color: var(--cyan); border: 1px solid var(--cyan); }
+
+        button.tool-btn { width: 100%; padding: 8px; background: #222; border: 1px solid #444; border-radius: 6px; color: white; cursor: pointer; margin-bottom: 4px; font-size: 11px; }
+        input[type=range] { width: 100%; height: 3px; accent-color: var(--accent); }
+
+        #video-container { position: fixed; bottom: 20px; left: 20px; width: 160px; height: 120px; border-radius: 12px; overflow: hidden; border: 2px solid #444; z-index: 90; display: none; }
+        #input_video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+
+        #start-screen { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .start-btn { padding: 15px 50px; font-size: 18px; border-radius: 50px; border: none; background: linear-gradient(90deg, #ffd700, #ff8800); cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-deep">
+
+    <div id="main-header">Merry Christmas</div>
+
+    <div id="start-screen">
+        <h1 style="font-family:'Great Vibes'; font-size: 3rem; color:#ffd700;">Winter Magic Pro</h1>
+        <p style="color:#888;">🖐手势控制：张开爆炸，左右移动控制位置</p>
+        <button class="start-btn" id="btn-start">进入 3D 世界 ✨</button>
+    </div>
+
+    <div id="video-container"><video id="input_video"></video></div>
+
+    <div id="ui-panel">
+        <div class="panel-section">
+            <span class="section-title">🎵 音乐播放器</span>
+            <input type="file" id="music-upload" accept="audio/*" multiple style="display:none">
+            <button class="tool-btn" onclick="document.getElementById('music-upload').click()">+ 上传音乐列表</button>
+            <div id="current-track" style="font-size: 10px; color: #aaa; margin: 5px 0; white-space: nowrap; overflow: hidden;">未播放</div>
+            <div class="music-ctrl">
+                <button class="m-btn" onclick="prevTrack()">⏮</button>
+                <button class="m-btn" id="play-pause" onclick="togglePlay()">▶</button>
+                <button class="m-btn" onclick="nextTrack()">⏭</button>
+                <button class="m-btn" id="loop-btn" onclick="toggleLoop()">🔁</button>
+            </div>
+            <input type="range" id="vol-slider" min="0" max="1" step="0.1" value="0.5" style="margin-top:8px;">
+        </div>
+
+        <div class="panel-section">
+            <span class="section-title">🎄 场景与树调节</span>
+            <select id="bg-select" class="tool-btn" style="text-align: left;">
+                <option value="black">🌌 纯黑 (Black)</option>
+                <option value="deep" selected>🌃 深邃 (Deep Blue)</option>
+                <option value="warm">🔥 暖冬 (Warm)</option>
+                <option value="aurora">❄️ 极光 (Aurora)</option>
+            </select>
+            <label style="font-size:11px; color:#666;">树高度</label>
+            <input type="range" id="height-slider" min="50" max="180" value="100">
+            <label style="font-size:11px; color:#666;">旋转速度</label>
+            <input type="range" id="speed-slider" min="0" max="0.05" step="0.001" value="0.006">
+        </div>
+
+        <div class="panel-section">
+            <span class="section-title">✨ 环境特效</span>
+            <label style="font-size:11px; color:#666;">雪花速度</label>
+            <input type="range" id="snow-slider" min="0" max="4" step="0.1" value="0.8">
+            <button class="tool-btn" onclick="toggleFS()">⛶ 全屏模式</button>
+            <button class="tool-btn" onclick="toggleCam()">📷 预览开关</button>
+        </div>
+
+        <div class="panel-section" style="border:none;">
+            <button class="tool-btn" style="background:#00e5ff; color:#000; font-weight:bold;" onclick="document.getElementById('file-in').click()">📷 导入个人照片云</button>
+            <input type="file" id="file-in" multiple accept="image/*" style="display:none">
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <script>
+        let scene, camera, renderer, treeGroup, star, snowParticles, fireworks = [];
+        let decorMeshes = [], photoUrls = [];
+        
+        // 音乐状态
+        let playlist = [], currentTrackIdx = 0, isLooping = false;
+        const audio = new Audio();
+        
+        const state = { 
+            explosion: 0, targetExplosion: 0, 
+            treeX: 0, targetTreeX: 0,
+            rotSpeed: 0.006, treeHeight: 100, snowSpeed: 0.8,
+            photoActive: false 
+        };
+
+        document.getElementById('btn-start').onclick = () => {
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('ui-panel').style.display = 'block';
+            document.getElementById('video-container').style.display = 'block';
+            initThree();
+            startTracking();
+        };
+
+        function initThree() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 2000);
+            camera.position.set(0, 50, 250);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+            const light = new THREE.PointLight(0xffd700, 2, 800);
+            light.position.set(50, 150, 50);
+            scene.add(light);
+
+            treeGroup = new THREE.Group();
+            scene.add(treeGroup);
+
+            createSnow();
+            refreshTree();
+            setupUI();
+            animate();
+        }
+
+        // 螺旋状生成逻辑
+        function refreshTree() {
+            decorMeshes.forEach(m => { if(!m.userData.isPhoto) treeGroup.remove(m); });
+            decorMeshes = decorMeshes.filter(m => m.userData.isPhoto);
+            if(star) treeGroup.remove(star);
+
+            const h = state.treeHeight;
+            const colors = [0xff4444, 0xffd700, 0x44ff44, 0x00e5ff, 0xff00ff, 0xffffff];
+
+            // 1. 星星
+            const starGeo = new THREE.SphereGeometry(6, 16, 16); // 简化为发光球或保留你的五角星逻辑
+            star = new THREE.Mesh(starGeo, new THREE.MeshPhongMaterial({color: 0xffd700, emissive: 0xffd700}));
+            star.position.y = h - h/3 + 5;
+            treeGroup.add(star);
+
+            // 2. 螺旋装饰品
+            const total = 500;
+            for (let i = 0; i < total; i++) {
+                const ratio = i / total;
+                const angle = i * 0.4; // 螺旋密度
+                const r = (1 - ratio) * (h * 0.4);
+                const y = ratio * h - h/3;
+
+                const mesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(ratio * 1.5 + 0.5), 
+                    new THREE.MeshPhongMaterial({color: colors[i % colors.length], shininess: 100})
+                );
+                
+                mesh.position.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
+                mesh.userData.origin = mesh.position.clone();
+                mesh.userData.explode = mesh.position.clone().normalize().multiplyScalar(180 + Math.random()*120);
+                treeGroup.add(mesh);
+                decorMeshes.push(mesh);
+            }
+        }
+
+        // 烟花系统
+        function createFirework() {
+            const count = 100;
+            const geo = new THREE.BufferGeometry();
+            const pos = new Float32Array(count * 3);
+            const vel = [];
+            const color = new THREE.Color().setHSL(Math.random(), 1, 0.5);
+            
+            const origin = new THREE.Vector3(Math.random()*400-200, Math.random()*200, Math.random()*200-300);
+            
+            for(let i=0; i<count; i++) {
+                pos[i*3]=origin.x; pos[i*3+1]=origin.y; pos[i*3+2]=origin.z;
+                const theta = Math.random()*Math.PI*2;
+                const phi = Math.random()*Math.PI;
+                const speed = 1 + Math.random()*2;
+                vel.push(new THREE.Vector3(Math.sin(phi)*Math.cos(theta)*speed, Math.sin(phi)*Math.sin(theta)*speed, Math.cos(phi)*speed));
+            }
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            const mat = new THREE.PointsMaterial({color: color, size: 2, transparent: true});
+            const points = new THREE.Points(geo, mat);
+            points.userData = {vel: vel, life: 1.0};
+            scene.add(points);
+            fireworks.push(points);
+        }
+
+        function createSnow() {
+            const geo = new THREE.BufferGeometry();
+            const pos = [];
+            for (let i = 0; i < 3000; i++) pos.push(Math.random()*1000-500, Math.random()*1000-500, Math.random()*1000-500);
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            snowParticles = new THREE.Points(geo, new THREE.PointsMaterial({color: 0xffffff, size: 1.2, transparent: true, opacity: 0.6}));
+            scene.add(snowParticles);
+        }
+
+        function startTracking() {
+            const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+            hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6});
+
+            hands.onResults(results => {
+                if (results.multiHandLandmarks && results.multiHandLandmarks[0]) {
+                    const lm = results.multiHandLandmarks[0];
+                    
+                    // 左右位置跟踪 (lm[9]是手掌中心)
+                    state.targetTreeX = (0.5 - lm[9].x) * 300; 
+
+                    // 爆炸逻辑
+                    const d = Math.hypot(lm[4].x - lm[20].x, lm[4].y - lm[20].y);
+                    state.targetExplosion = Math.min(Math.max((d - 0.15) * 4, 0), 1);
+                    
+                    // 捏合看图
+                    const pinch = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+                    if(pinch < 0.05 && !state.photoActive && photoUrls.length > 0) {
+                        showModal(photoUrls[Math.floor(Math.random()*photoUrls.length)]);
+                        state.photoActive = true;
+                    } else if(pinch > 0.12) {
+                        hideModal();
+                        state.photoActive = false;
+                    }
+                } else {
+                    state.targetExplosion = 0;
+                }
+            });
+
+            new Camera(document.getElementById('input_video'), {
+                onFrame: async () => { await hands.send({image: document.getElementById('input_video')}); },
+                width: 640, height: 480
+            }).start();
+        }
+
+        // --- 播放器逻辑 ---
+        document.getElementById('music-upload').onchange = (e) => {
+            const files = Array.from(e.target.files);
+            playlist = files.map(f => ({ url: URL.createObjectURL(f), name: f.name }));
+            if(playlist.length > 0) playTrack(0);
+        };
+
+        function playTrack(idx) {
+            currentTrackIdx = idx;
+            audio.src = playlist[idx].url;
+            audio.play();
+            document.getElementById('current-track').innerText = "正在播放: " + playlist[idx].name;
+            document.getElementById('play-pause').innerText = "⏸";
+        }
+
+        function togglePlay() {
+            if(audio.paused) { audio.play(); document.getElementById('play-pause').innerText = "⏸"; }
+            else { audio.pause(); document.getElementById('play-pause').innerText = "▶"; }
+        }
+
+        function nextTrack() { if(playlist.length) playTrack((currentTrackIdx + 1) % playlist.length); }
+        function prevTrack() { if(playlist.length) playTrack((currentTrackIdx - 1 + playlist.length) % playlist.length); }
+        function toggleLoop() { isLooping = !isLooping; audio.loop = isLooping; document.getElementById('loop-btn').classList.toggle('loop-active'); }
+        audio.onended = () => { if(!isLooping) nextTrack(); };
+
+        // --- UI 设置 ---
+        function setupUI() {
+            document.getElementById('bg-select').onchange = (e) => document.body.className = 'bg-' + e.target.value;
+            document.getElementById('height-slider').oninput = (e) => { state.treeHeight = parseInt(e.target.value); refreshTree(); };
+            document.getElementById('speed-slider').oninput = (e) => state.rotSpeed = parseFloat(e.target.value);
+            document.getElementById('snow-slider').oninput = (e) => state.snowSpeed = parseFloat(e.target.value);
+            document.getElementById('vol-slider').oninput = (e) => audio.volume = e.target.value;
+            
+            document.getElementById('file-in').onchange = (e) => {
+                Array.from(e.target.files).forEach(file => {
+                    const url = URL.createObjectURL(file);
+                    const tex = new THREE.TextureLoader().load(url);
+                    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(18, 18), new THREE.MeshBasicMaterial({map:tex, side:2}));
+                    const relY = Math.random() * 0.7;
+                    mesh.position.set(Math.random()*100-50, (relY * state.treeHeight) - state.treeHeight/3, Math.random()*100-50);
+                    mesh.userData = { origin: mesh.position.clone(), explode: mesh.position.clone().normalize().multiplyScalar(200), isPhoto: true };
+                    treeGroup.add(mesh);
+                    decorMeshes.push(mesh);
+                    photoUrls.push(url);
+                });
+            };
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            state.explosion += (state.targetExplosion - state.explosion) * 0.1;
+            state.treeX += (state.targetTreeX - state.treeX) * 0.05;
+            treeGroup.position.x = state.treeX;
+
+            decorMeshes.forEach(m => {
+                m.position.lerpVectors(m.userData.origin, m.userData.explode, state.explosion);
+                if(m.userData.isPhoto) m.lookAt(camera.position);
+            });
+
+            // 雪花
+            if(snowParticles) {
+                const arr = snowParticles.geometry.attributes.position.array;
+                for(let i=1; i<arr.length; i+=3) {
+                    arr[i] -= state.snowSpeed;
+                    if(arr[i] < -400) arr[i] = 400;
+                }
+                snowParticles.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // 烟花逻辑
+            if(Math.random() < 0.02) createFirework();
+            fireworks.forEach((fw, idx) => {
+                const arr = fw.geometry.attributes.position.array;
+                const vels = fw.userData.vel;
+                fw.userData.life -= 0.01;
+                for(let i=0; i<vels.length; i++) {
+                    arr[i*3] += vels[i].x; arr[i*3+1] += vels[i].y; arr[i*3+2] += vels[i].z;
+                    vels[i].y -= 0.02; // 重力
+                }
+                fw.geometry.attributes.position.needsUpdate = true;
+                fw.material.opacity = fw.userData.life;
+                if(fw.userData.life <= 0) { scene.remove(fw); fireworks.splice(idx, 1); }
+            });
+
+            if(star) star.rotation.y += 0.05;
+            treeGroup.rotation.y += state.rotSpeed;
+            renderer.render(scene, camera);
+        }
+
+        function showModal(src) { document.getElementById('modal-img').src = src; document.getElementById('photo-modal').classList.add('active'); }
+        function hideModal() { document.getElementById('photo-modal').classList.remove('active'); }
+        function toggleFS() { if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+        function toggleCam() { const el = document.getElementById('video-container'); el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
+        window.onresize = () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
+    </script>
+</body>
+</html>
