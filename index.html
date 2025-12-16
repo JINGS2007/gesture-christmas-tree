@@ -239,25 +239,21 @@
         }
 
         // --- 相机和控制更新 (手旋转交互) ---
-        let handRotationX = 0;
-        let handRotationY = 0;
-        // ... (updateCamera 函数与之前骨架相同) ...
-
-        function updateCamera(delta) {
-            let targetPosition = new THREE.Vector3(0, 5, config.cameraDistance);
-            let cameraTarget = new THREE.Vector3(0, 0, 0);
-
+        let camTargetPos = new THREE.Vector3(0, 5, config.cameraDist);
             if (currentState === 'SCATTERED') {
-                const rotationFactor = 0.002; 
-                targetPosition.x += handRotationX * rotationFactor;
-                targetPosition.y += handRotationY * rotationFactor;
-            } else if (currentState === 'PHOTO_FOCUS' && focusedPhoto) {
-                cameraTarget = focusedPhoto.position.clone();
-                targetPosition = focusedPhoto.position.clone().add(new THREE.Vector3(0, 0, 5));
+                camTargetPos.x += handRotationX;
+                camTargetPos.y += handRotationY;
             }
-            
-            camera.position.lerp(targetPosition, config.transitionSpeed * 2);
-            camera.lookAt(cameraTarget);
+            camera.position.lerp(camTargetPos, 0.05);
+            camera.lookAt(0, 3, 0);
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
         // --- MediaPipe Hand 逻辑与状态切换 ---
