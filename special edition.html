@@ -3,20 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Magic Christmas - Gesture Control</title>
+    <title>3D Magic Christmas - Pro V3</title>
     <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
     <style>
-        :root { --panel-bg: rgba(10, 10, 10, 0.9); --accent: #ffd700; --cyan: #00e5ff; }
+        :root { --panel-bg: rgba(10, 10, 10, 0.95); --accent: #ffd700; }
         body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Segoe UI', sans-serif; color: white; }
         
-        /* 背景风格 */
-        body.bg-deep { background: radial-gradient(circle at center, #050a1f 0%, #000 100%); }
-        body.bg-black { background: #000; }
-        body.bg-warm { background: radial-gradient(circle at center, #240b0b 0%, #000 100%); }
-
+        /* 页面标题 */
         #main-header {
             position: absolute; top: 15px; width: 100%; text-align: center;
-            font-family: 'Great Vibes', cursive; font-size: clamp(2rem, 5vw, 4rem);
+            font-family: 'Great Vibes', cursive; font-size: clamp(2.5rem, 6vw, 4.5rem);
             background: linear-gradient(to bottom, #fff, #ffd700);
             -webkit-background-clip: text; background-clip: text;
             -webkit-text-fill-color: transparent; z-index: 50; pointer-events: none;
@@ -24,121 +20,88 @@
 
         /* 启动屏幕 */
         #start-screen {
-            position: fixed; inset: 0; background: #000; z-index: 1000;
-            display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
+            position: fixed; inset: 0; background: radial-gradient(circle, #222, #000); z-index: 1000;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
         .start-btn { 
-            padding: 15px 50px; font-size: 20px; border-radius: 50px; border: none; 
+            padding: 18px 60px; font-size: 22px; border-radius: 50px; border: none; 
             background: linear-gradient(90deg, #ffd700, #ff8800); cursor: pointer; 
-            font-weight: bold; color: #000; transition: transform 0.2s;
+            font-weight: bold; box-shadow: 0 0 20px rgba(255,215,0,0.4);
         }
-        .start-btn:hover { transform: scale(1.1); }
 
-        /* 右上角控制面板 */
+        /* 控制面板 */
         #ui-panel {
             position: fixed; top: 20px; right: 20px; width: 260px; background: var(--panel-bg);
             padding: 20px; border-radius: 20px; z-index: 100; border: 1px solid rgba(255,255,255,0.1);
-            display: none; backdrop-filter: blur(10px);
+            display: none; backdrop-filter: blur(15px);
         }
-        .panel-title { color: var(--accent); font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 5px; }
-        .control-group { margin-bottom: 15px; }
-        .control-group label { display: flex; justify-content: space-between; font-size: 12px; color: #aaa; margin-bottom: 5px; }
-        
-        button.tool-btn { width: 100%; padding: 10px; background: #222; border: 1px solid #444; border-radius: 8px; color: white; cursor: pointer; margin-bottom: 8px; font-size: 13px; }
-        button.tool-btn:hover { background: #333; }
-        
-        select { width: 100%; background: #222; color: white; padding: 8px; border: 1px solid #444; border-radius: 5px; }
-        input[type=range] { width: 100%; cursor: pointer; }
+        .control-group { margin-bottom: 15px; font-size: 13px; }
+        .control-group label { display: block; color: #888; margin-bottom: 5px; }
+        button.tool-btn { width: 100%; padding: 10px; background: #222; border: 1px solid #444; border-radius: 8px; color: white; cursor: pointer; margin-bottom: 8px; }
 
-        /* 左下角：摄像头预览 */
+        /* 左下角：摄像头 */
         #video-container {
-            position: fixed; bottom: 20px; left: 20px; width: 180px; height: 135px; 
+            position: fixed; bottom: 20px; left: 20px; width: 200px; height: 150px; 
             border-radius: 12px; overflow: hidden; border: 2px solid #444; z-index: 90;
             display: none; background: #000;
         }
         #input_video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
 
-        /* 右下角：YouTube 播放器（调试用） */
+        /* 右下角：YouTube */
         #yt-debug-container {
             position: fixed; bottom: 20px; right: 20px; width: 280px; height: 160px;
             border-radius: 15px; overflow: hidden; border: 2px solid var(--accent); z-index: 110;
-            display: none; background: #000; box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            display: none; background: #000;
         }
 
-        canvas { display: block; }
+        canvas { display: block; cursor: move; }
     </style>
 </head>
-<body class="bg-deep">
+<body>
 
     <div id="main-header">Merry Christmas</div>
 
     <div id="start-screen">
-        <h1 style="font-family:'Great Vibes'; font-size: 3.5rem; color:#ffd700; margin-bottom:10px;">Winter Magic 3D</h1>
-        <p style="color:#888; margin-bottom:30px;">🖐 张开手掌：圣诞树爆炸 | ✊ 握紧拳头：圣诞树还原</p>
-        <button class="start-btn" id="btn-start">点击开启魔法之旅</button>
+        <h1 style="font-family:'Great Vibes'; font-size: 4rem; color:#ffd700; margin:0;">Magic Tree V3</h1>
+        <p style="color:#aaa; margin: 20px 0 40px;">🖐 张开手：爆炸 | ✊ 握拳：还原</p>
+        <button class="start-btn" id="btn-start">进入魔法世界</button>
     </div>
 
-    <div id="yt-debug-container">
-        <div id="player"></div>
-    </div>
-
-    <div id="video-container">
-        <video id="input_video"></video>
-    </div>
+    <div id="yt-debug-container"><div id="player"></div></div>
+    <div id="video-container"><video id="input_video"></video></div>
 
     <div id="ui-panel">
-        <div class="panel-title">🎄 圣诞控制中心</div>
-        
-        <div class="control-group">
-            <label>场景背景</label>
-            <select id="bg-select">
-                <option value="deep" selected>🌃 深邃星空</option>
-                <option value="black">🌌 纯净黑</option>
-                <option value="warm">🔥 暖冬红</option>
-            </select>
-        </div>
-
+        <div style="color:var(--accent); font-weight:bold; margin-bottom:15px;">🎄 实时设置</div>
         <div class="control-group">
             <label>音乐音量</label>
-            <input type="range" id="vol-slider" min="0" max="100" value="50">
+            <input type="range" id="vol-slider" min="0" max="100" value="50" style="width:100%">
         </div>
-
-        <button class="tool-btn" onclick="toggleCam()">📷 显示/隐藏摄像头</button>
-        <button class="tool-btn" onclick="toggleYT()">📺 显示/隐藏播放器</button>
-        <button class="tool-btn" onclick="location.reload()">🔄 重置场景</button>
-        
-        <p style="font-size: 10px; color: #666; margin-top: 10px;">提示：若无音乐，请手动点击右下角视频中的播放按钮。</p>
+        <button class="tool-btn" onclick="toggleCam()">📷 开/关摄像头预览</button>
+        <button class="tool-btn" onclick="toggleYT()">📺 隐藏/显示音乐播放器</button>
+        <button class="tool-btn" onclick="location.reload()">🔄 重启应用</button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
 
     <script>
-        let scene, camera, renderer, treeGroup, player;
+        let scene, camera, renderer, treeGroup, star, player;
         let decorMeshes = [];
-        const state = { explosion: 0, targetExplosion: 0, treeHeight: 100 };
+        const state = { explosion: 0, targetExplosion: 0 };
 
-        // 1. YouTube 播放器初始化
+        // 1. YouTube 播放器逻辑
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('player', {
-                height: '100%',
-                width: '100%',
-                videoId: 'UMfuUX8OdZc', // 你提供的歌曲 ID
-                playerVars: {
-                    'autoplay': 1,
-                    'controls': 1,
-                    'loop': 1,
-                    'playlist': 'UMfuUX8OdZc'
-                },
-                events: {
-                    'onReady': (e) => { e.target.setVolume(50); }
-                }
+                height: '100%', width: '100%',
+                videoId: 'UMfuUX8OdZc',
+                playerVars: { 'autoplay': 1, 'controls': 1, 'loop': 1, 'playlist': 'UMfuUX8OdZc' },
+                events: { 'onReady': (e) => e.target.setVolume(50) }
             });
         }
 
-        // 2. 启动逻辑
+        // 2. 点击开启
         document.getElementById('btn-start').onclick = () => {
             document.getElementById('start-screen').style.display = 'none';
             document.getElementById('ui-panel').style.display = 'block';
@@ -147,51 +110,58 @@
             
             initThree();
             startTracking();
-            
-            if (player && player.playVideo) {
-                player.playVideo();
-                player.unMute();
-            }
+            if (player && player.playVideo) { player.playVideo(); player.unMute(); }
         };
 
-        // 3. Three.js 场景初始化 (3D 圣诞树)
+        // 3. 3D 圣诞树与星星
         function initThree() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 40, 200);
+            camera.position.set(0, 30, 200);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
             document.body.appendChild(renderer.domElement);
 
-            const light = new THREE.PointLight(0xffffff, 1, 500);
-            light.position.set(50, 50, 50);
-            scene.add(light);
             scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+            const pointLight = new THREE.PointLight(0xffd700, 1.5, 300);
+            pointLight.position.set(0, 80, 50);
+            scene.add(pointLight);
 
             treeGroup = new THREE.Group();
             scene.add(treeGroup);
 
-            // 生成圣诞树粒子/装饰物
-            const h = state.treeHeight;
-            const colors = [0xff4444, 0xffd700, 0x00e5ff, 0xffffff];
-            for (let i = 0; i < 400; i++) {
-                const ratio = i / 400;
-                const r = (1 - ratio) * 50;
-                const angle = i * 0.4;
-                const x = Math.cos(angle) * r;
-                const z = Math.sin(angle) * r;
-                const y = ratio * h - h / 2;
+            // 创建顶部的星星
+            const starShape = new THREE.Shape();
+            for(let i=0; i<10; i++) {
+                const r = i % 2 === 0 ? 12 : 5;
+                const a = (Math.PI * 2 / 10) * i;
+                if(i===0) starShape.moveTo(Math.cos(a)*r, Math.sin(a)*r);
+                else starShape.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+            }
+            star = new THREE.Mesh(
+                new THREE.ExtrudeGeometry(starShape, { depth: 2, bevelEnabled: false }),
+                new THREE.MeshPhongMaterial({ color: 0xffd700, emissive: 0xff8800 })
+            );
+            star.position.y = 85;
+            treeGroup.add(star);
+
+            // 创建圣诞树装饰球
+            const colors = [0xff4444, 0xffd700, 0x00ff88, 0xffffff];
+            for (let i = 0; i < 350; i++) {
+                const ratio = i / 350;
+                const radius = (1 - ratio) * 55;
+                const angle = i * 0.45;
+                const y = ratio * 110 - 40;
 
                 const mesh = new THREE.Mesh(
-                    new THREE.SphereGeometry(1.2, 8, 8),
-                    new THREE.MeshPhongMaterial({ color: colors[i % colors.length], emissive: colors[i % colors.length], emissiveIntensity: 0.5 })
+                    new THREE.SphereGeometry(1.5, 8, 8),
+                    new THREE.MeshStandardMaterial({ color: colors[i % 4], metalness: 0.7, roughness: 0.2 })
                 );
-                mesh.position.set(x, y, z);
+                mesh.position.set(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
                 mesh.userData = { 
                     origin: mesh.position.clone(), 
-                    explode: mesh.position.clone().normalize().multiplyScalar(200) 
+                    explode: mesh.position.clone().normalize().multiplyScalar(220) 
                 };
                 treeGroup.add(mesh);
                 decorMeshes.push(mesh);
@@ -199,57 +169,48 @@
             animate();
         }
 
-        // 4. 手势追踪逻辑
+        // 4. 手势控制逻辑 (关键)
         function startTracking() {
             const videoElement = document.getElementById('input_video');
             const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
             
-            hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+            hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.5 });
             hands.onResults(results => {
                 if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                     const lm = results.multiHandLandmarks[0];
-                    // 计算大拇指与小拇指距离判断张手/握拳
-                    const dist = Math.hypot(lm[4].x - lm[20].x, lm[4].y - lm[20].y);
-                    state.targetExplosion = dist > 0.4 ? 1 : 0; 
+                    // 计算手掌中心到指尖的距离来判断张合
+                    const d1 = Math.hypot(lm[8].x - lm[0].x, lm[8].y - lm[0].y); // 食指
+                    const d2 = Math.hypot(lm[12].x - lm[0].x, lm[12].y - lm[0].y); // 中指
+                    state.targetExplosion = (d1 + d2) > 0.8 ? 1 : 0;
                 } else {
                     state.targetExplosion = 0;
                 }
             });
 
-            const cameraTrack = new Camera(videoElement, {
+            const cam = new Camera(videoElement, {
                 onFrame: async () => { await hands.send({image: videoElement}); },
                 width: 640, height: 480
             });
-            cameraTrack.start();
+            cam.start();
         }
 
-        // 5. 动画循环
         function animate() {
             requestAnimationFrame(animate);
-            // 平滑爆炸效果
             state.explosion += (state.targetExplosion - state.explosion) * 0.1;
             decorMeshes.forEach(m => {
                 m.position.lerpVectors(m.userData.origin, m.userData.explode, state.explosion);
             });
-            treeGroup.rotation.y += 0.005;
+            
+            treeGroup.rotation.y += 0.006;
+            if(star) star.rotation.z += 0.02; // 星星自转
+            
             renderer.render(scene, camera);
         }
 
-        // 6. UI 功能函数
-        function toggleCam() {
-            const v = document.getElementById('video-container');
-            v.style.display = v.style.display === 'none' ? 'block' : 'none';
-        }
-        function toggleYT() {
-            const y = document.getElementById('yt-debug-container');
-            y.style.display = y.style.display === 'none' ? 'block' : 'none';
-        }
-        document.getElementById('bg-select').onchange = (e) => {
-            document.body.className = 'bg-' + e.target.value;
-        };
-        document.getElementById('vol-slider').oninput = (e) => {
-            if(player && player.setVolume) player.setVolume(e.target.value);
-        };
+        // 5. 功能函数
+        function toggleCam() { document.getElementById('video-container').style.display = document.getElementById('video-container').style.display === 'none' ? 'block' : 'none'; }
+        function toggleYT() { document.getElementById('yt-debug-container').style.display = document.getElementById('yt-debug-container').style.display === 'none' ? 'block' : 'none'; }
+        document.getElementById('vol-slider').oninput = (e) => { if(player && player.setVolume) player.setVolume(e.target.value); };
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
