@@ -264,11 +264,11 @@
         }});
         hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
         hands.onResults(onResults);
-        const cameraFeed = new Camera(videoElement, {
+        const cameraFeed = new window.Camera(videoElement, {
             onFrame: async () => { await hands.send({image: videoElement}); },
             width: 640, height: 480
         });
-        cameraFeed.start();
+        new cameraFeed.start();
         let lastHandPosition = null; 
         
         function onResults(results) { /* ... (手势判断和状态切换逻辑) ... */ }
