@@ -2,38 +2,33 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Starry Night - Gesture Control 3D</title>
+    <title>Starry Night Gesture Control - Pixel Edition</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
         #container { width: 100vw; height: 100vh; }
-        
-        /* 视频反馈窗口 */
         #video-container {
             position: absolute; bottom: 20px; right: 20px;
-            width: 240px; height: 180px;
-            border: 2px solid rgba(255, 215, 0, 0.5);
-            border-radius: 8px; overflow: hidden;
-            transform: scaleX(-1); /* 镜像显示 */
-            z-index: 10;
+            width: 200px; height: 150px;
+            border: 2px solid #d4af37; border-radius: 10px;
+            overflow: hidden; transform: scaleX(-1); z-index: 100;
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
         }
         #input_video { width: 100%; height: 100%; object-fit: cover; }
-
-        /* UI 提示 */
-        #ui-overlay {
-            position: absolute; top: 30px; left: 30px;
-            color: #ffd700; text-shadow: 0 0 10px rgba(212, 175, 55, 0.8);
-            pointer-events: none;
+        #ui {
+            position: absolute; top: 40px; left: 40px; color: #d4af37;
+            pointer-events: none; z-index: 100;
         }
-        .status-tag { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #fff; opacity: 0.7; }
-        h1 { margin: 5px 0; font-weight: 300; font-size: 24px; }
+        .label { font-size: 10px; letter-spacing: 4px; opacity: 0.6; text-transform: uppercase; }
+        h1 { margin: 10px 0; font-weight: 200; font-size: 28px; letter-spacing: 2px; }
+        #status { font-style: italic; color: #fff; text-shadow: 0 0 10px #d4af37; }
     </style>
 </head>
 <body>
 
-    <div id="ui-overlay">
-        <div class="status-tag">Interactive Particle System</div>
-        <h1>STARRY NIGHT · GOLDEN EDITION</h1>
-        <p id="gesture-hint">正在初始化摄像头...</p>
+    <div id="ui">
+        <div class="label">Interactive Art Experience</div>
+        <h1>STARRY NIGHT: PIXEL PARTICLES</h1>
+        <div id="status">正在加载《星夜》像素数据...</div>
     </div>
 
     <div id="video-container">
@@ -47,221 +42,197 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
-    <script src="https://unpkg.com/three@0.150.0/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="https://unpkg.com/three@0.150.0/examples/js/postprocessing/RenderPass.js"></script>
-    <script src="https://unpkg.com/three@0.150.0/examples/js/postprocessing/ShaderPass.js"></script>
-    <script src="https://unpkg.com/three@0.150.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-    <script src="https://unpkg.com/three@0.150.0/examples/js/shaders/CopyShader.js"></script>
-    <script src="https://unpkg.com/three@0.150.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
-
     <script>
-        /**
-         * 1. 核心场景配置
-         */
-        let scene, camera, renderer, composer, particles;
-        const PARTICLE_COUNT = 15000;
-        let currentState = 'scatter'; // 'gather', 'scatter'
+        let scene, camera, renderer, particles, geometry;
+        const PARTICLE_COUNT = 15000; // 粒子数量
+        let currentState = 'painting'; // 'painting', 'gather', 'scatter'
         
-        const COLORS = {
-            gold: new THREE.Color(0xD4AF37),
-            silver: new THREE.Color(0xC0C0C0),
-            dark: new THREE.Color(0x050505)
-        };
+        // 预设坐标数组
+        let posPainting, posGather, posScatter;
+        let colors;
 
-        const initScene = () => {
+        async function init() {
+            // 1. 初始化场景
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.z = 250;
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.z = 400;
 
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setClearColor(0x050505, 1);
+            renderer.setPixelRatio(window.devicePixelRatio);
             document.getElementById('container').appendChild(renderer.domElement);
 
-            // 后期处理：辉光
-            const renderScene = new THREE.RenderPass(scene, camera);
-            const bloomPass = new THREE.UnrealBloomPass(
-                new THREE.Vector2(window.innerWidth, window.innerHeight),
-                1.5, 0.4, 0.85
-            );
-            bloomPass.threshold = 0.2;
-            bloomPass.strength = 2.0;
-            bloomPass.radius = 0.5;
+            // 2. 加载图片并提取像素
+            await loadPixelData("https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/600px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg");
 
-            composer = new THREE.EffectComposer(renderer);
-            composer.addPass(renderScene);
-            composer.addPass(bloomPass);
-
-            createParticles();
-            window.addEventListener('resize', onWindowResize);
-        };
-
-        /**
-         * 2. 粒子创建与几何变换逻辑
-         */
-        const createParticles = () => {
-            const geometry = new THREE.BufferGeometry();
-            const positions = new Float32Array(PARTICLE_COUNT * 3);
-            const colors = new Float32Array(PARTICLE_COUNT * 3);
+            // 3. 设置手势识别
+            initHands();
             
-            // 存储不同形态的目标坐标
-            const gatherPositions = new Float32Array(PARTICLE_COUNT * 3);
-            const scatterPositions = new Float32Array(PARTICLE_COUNT * 3);
+            animate();
+            window.addEventListener('resize', onWindowResize);
+        }
 
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const i3 = i * 3;
-                
-                // 初始散开态 (球状分布)
-                const r = 200 * Math.random();
-                const theta = Math.random() * Math.PI * 2;
-                const phi = Math.acos(2 * Math.random() - 1);
-                scatterPositions[i3] = r * Math.sin(phi) * Math.cos(theta);
-                scatterPositions[i3+1] = r * Math.sin(phi) * Math.sin(theta);
-                scatterPositions[i3+2] = r * Math.cos(phi);
+        async function loadPixelData(url) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.src = url;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = 200; // 采样宽度
+                    canvas.height = 150; // 采样高度
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
 
-                // 初始聚合态 (圆锥体/圣诞树)
-                const height = 150 * Math.random();
-                const radiusAtHeight = (150 - height) * 0.4;
-                const angle = Math.random() * Math.PI * 2;
-                gatherPositions[i3] = Math.cos(angle) * radiusAtHeight;
-                gatherPositions[i3+1] = height - 75;
-                gatherPositions[i3+2] = Math.sin(angle) * radiusAtHeight;
+                    posPainting = new Float32Array(PARTICLE_COUNT * 3);
+                    posGather = new Float32Array(PARTICLE_COUNT * 3);
+                    posScatter = new Float32Array(PARTICLE_COUNT * 3);
+                    colors = new Float32Array(PARTICLE_COUNT * 3);
 
-                // 初始位置
-                positions[i3] = scatterPositions[i3];
-                positions[i3+1] = scatterPositions[i3+1];
-                positions[i3+2] = scatterPositions[i3+2];
+                    for (let i = 0; i < PARTICLE_COUNT; i++) {
+                        const i3 = i * 3;
+                        
+                        // 随机采样图片中的像素点
+                        const x = Math.floor(Math.random() * canvas.width);
+                        const y = Math.floor(Math.random() * canvas.height);
+                        const pixelIndex = (y * canvas.width + x) * 4;
 
-                // 颜色混搭 (金+银)
-                const mixColor = Math.random() > 0.5 ? COLORS.gold : COLORS.silver;
-                colors[i3] = mixColor.r;
-                colors[i3+1] = mixColor.g;
-                colors[i3+2] = mixColor.b;
-            }
+                        // 状态1: 名画形态 (Painting)
+                        posPainting[i3] = (x - canvas.width / 2) * 2.5;
+                        posPainting[i3 + 1] = -(y - canvas.height / 2) * 2.5;
+                        posPainting[i3 + 2] = 0;
 
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                        // 状态2: 圣诞树/圆锥形态 (Gather)
+                        const h = Math.random() * 300;
+                        const r = (300 - h) * 0.3;
+                        const angle = Math.random() * Math.PI * 2;
+                        posGather[i3] = Math.cos(angle) * r;
+                        posGather[i3 + 1] = h - 150;
+                        posGather[i3 + 2] = Math.sin(angle) * r;
+
+                        // 状态3: 散开态 (Scatter)
+                        posScatter[i3] = (Math.random() - 0.5) * 1000;
+                        posScatter[i3 + 1] = (Math.random() - 0.5) * 1000;
+                        posScatter[i3 + 2] = (Math.random() - 0.5) * 1000;
+
+                        // 颜色：混合图片颜色与金色
+                        const r_col = imgData[pixelIndex] / 255;
+                        const g_col = imgData[pixelIndex + 1] / 255;
+                        const b_col = imgData[pixelIndex + 2] / 255;
+                        
+                        // 加入金银色调
+                        colors[i3] = r_col * 0.8 + 0.2; // 偏红/金
+                        colors[i3 + 1] = g_col * 0.7 + 0.15;
+                        colors[i3 + 2] = b_col * 0.5;
+                    }
+
+                    createParticleSystem();
+                    document.getElementById('status').innerText = "加载完成。张开手掌散开，握拳聚合。";
+                    resolve();
+                };
+            });
+        }
+
+        function createParticleSystem() {
+            geometry = new THREE.BufferGeometry();
+            // 初始设为名画形态
+            geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posPainting), 3));
             geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-            geometry.userData = { gatherPositions, scatterPositions };
 
             const material = new THREE.PointsMaterial({
-                size: 1.5,
+                size: 2.2,
                 vertexColors: true,
                 transparent: true,
                 opacity: 0.8,
-                blending: THREE.AdditiveBlending,
-                sizeAttenuation: true
+                blending: THREE.AdditiveBlending
             });
 
             particles = new THREE.Points(geometry, material);
             scene.add(particles);
-        };
+        }
 
-        // 状态切换动画
-        const transitionTo = (state) => {
-            if (currentState === state) return;
-            currentState = state;
-            const posAttr = particles.geometry.attributes.position;
-            const targetData = state === 'gather' ? 
-                               particles.geometry.userData.gatherPositions : 
-                               particles.geometry.userData.scatterPositions;
+        function transformTo(type) {
+            if (currentState === type) return;
+            currentState = type;
+            
+            const targetPos = type === 'gather' ? posGather : (type === 'scatter' ? posScatter : posPainting);
+            const posAttr = geometry.attributes.position;
 
             for (let i = 0; i < PARTICLE_COUNT; i++) {
                 const i3 = i * 3;
                 gsap.to(posAttr.array, {
-                    [i3]: targetData[i3],
-                    [i3+1]: targetData[i3+1],
-                    [i3+2]: targetData[i3+2],
-                    duration: 2,
-                    ease: "expo.out",
-                    delay: Math.random() * 0.5,
+                    [i3]: targetPos[i3],
+                    [i3+1]: targetPos[i3+1],
+                    [i3+2]: targetPos[i3+2],
+                    duration: 1.5,
+                    ease: "power2.inOut",
+                    delay: Math.random() * 0.3,
                     onUpdate: () => posAttr.needsUpdate = true
                 });
             }
-        };
-
-        /**
-         * 3. MediaPipe 手势识别逻辑
-         */
-        const videoElement = document.getElementById('input_video');
-        const hint = document.getElementById('gesture-hint');
-
-        function onResults(results) {
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const hand = results.multiHandLandmarks[0];
-                
-                // 判断握拳还是张开 (计算指尖与手掌中心距离)
-                const palmCenter = hand[0];
-                const indexTip = hand[8];
-                const distance = Math.hypot(indexTip.x - palmCenter.x, indexTip.y - palmCenter.y);
-
-                if (distance < 0.15) {
-                    hint.innerText = "状态：握拳 - 聚合形态";
-                    transitionTo('gather');
-                } else {
-                    hint.innerText = "状态：张开 - 散开星空";
-                    transitionTo('scatter');
-                }
-
-                // 手部移动控制相机旋转 (上下左右)
-                const targetX = (hand[9].x - 0.5) * 400;
-                const targetY = -(hand[9].y - 0.5) * 400;
-                gsap.to(camera.position, {
-                    x: targetX,
-                    y: targetY,
-                    duration: 1,
-                    ease: "power2.out"
-                });
-                camera.lookAt(0, 0, 0);
-            }
         }
 
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
+        function initHands() {
+            const videoElement = document.getElementById('input_video');
+            const hands = new Hands({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            });
 
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-        hands.onResults(onResults);
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
+            hands.onResults((results) => {
+                if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+                
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // 1. 手势检测：握拳 vs 张开
+                const fingerTips = [8, 12, 16, 20];
+                const wrist = landmarks[0];
+                let totalDist = 0;
+                fingerTips.forEach(idx => {
+                    const tip = landmarks[idx];
+                    totalDist += Math.hypot(tip.x - wrist.x, tip.y - wrist.y);
+                });
 
-        const cameraPipe = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({ image: videoElement });
-            },
-            width: 640,
-            height: 480
-        });
-        cameraPipe.start();
+                if (totalDist < 0.6) {
+                    transformTo('gather');
+                } else {
+                    transformTo('scatter');
+                }
 
-        /**
-         * 4. 渲染循环
-         */
+                // 2. 相机控制：手部位置映射
+                const midX = landmarks[9].x - 0.5;
+                const midY = landmarks[9].y - 0.5;
+                gsap.to(camera.position, {
+                    x: midX * 800,
+                    y: -midY * 800,
+                    duration: 0.8
+                });
+                camera.lookAt(0, 0, 0);
+            });
+
+            const cameraPipe = new Camera(videoElement, {
+                onFrame: async () => { await hands.send({ image: videoElement }); },
+                width: 640, height: 480
+            });
+            cameraPipe.start();
+        }
+
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-            composer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        const animate = () => {
+        function animate() {
             requestAnimationFrame(animate);
-            
-            // 粒子微动（呼吸感）
             if (particles) {
-                particles.rotation.y += 0.001;
-                particles.rotation.z += 0.0005;
+                particles.rotation.y += 0.002;
             }
+            renderer.render(scene, camera);
+        }
 
-            composer.render();
-        };
-
-        initScene();
-        animate();
-
+        init();
     </script>
 </body>
 </html>
