@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>神秘礼物-2026</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000; /* 背景改为黑色 */
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+
+        /* 居中祝福语样式 */
+        #center-wish {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2.8rem;
+            font-weight: bold;
+            color: #ff4081;
+            /* 增强文字在黑底下的发光感 */
+            text-shadow: 0 0 10px rgba(255, 64, 129, 0.8), 0 0 20px rgba(255, 64, 129, 0.5);
+            white-space: nowrap;
+            z-index: 1; 
+            opacity: 0;
+            transition: opacity 1s;
+        }
+
+        /* 初始弹窗样式 */
+        #modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.1); /* 黑色背景下调淡遮罩 */
+            backdrop-filter: blur(5px); /* 背景模糊增加高级感 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            width: 80%;
+        }
+        .modal-content h2 { color: #ff4081; margin-bottom: 20px; }
+        .modal-content button {
+            background: #ff4081;
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 50px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        /* 便签通用样式 */
+        .note {
+            position: absolute;
+            padding: 10px 12px;
+            border-radius: 10px;
+            box-shadow: 3px 5px 15px rgba(0,0,0,0.3);
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            white-space: nowrap;
+            user-select: none;
+            touch-action: none;
+            opacity: 0;
+            transform: scale(0);
+            /* 回弹阻尼动画 */
+            animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+            /* 散开时的平滑过渡效果 */
+            transition: left 1.2s ease-out, top 1.2s ease-out, transform 0.5s;
+        }
+
+        @keyframes bounceIn {
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="center-wish">祝你2026</div>
+
+<div id="modal">
+    <div class="modal-content">
+        <h2>🎁 惊喜提示</h2>
+        <p>你收到一份神秘礼物</p>
+        <button onclick="startApp()">点击开启</button>
+    </div>
+</div>
+
+<div id="container"></div>
+
+<script>
+    const messages = [
+        "❤️ 记得吃饭", "😊 天天开心", "😘 我很想你", "🌟 保持心情", "🍜 按时进餐",
+        "🧸 抱抱你", "☁️ 梦里有我", "🌈 爱自己", "🌹 送你花花", "🥰 爱你一天",
+        "🍃 注意保暖", "🍓 甜甜的你", "☀️ 永远阳光", "✨ 你最闪耀", "🍬 给点甜头",
+        "🥂 敬未来", "👫 一直在呢", "🌙 晚安好梦", "🔥 热情似火", "🍀 好运常在",
+        "🎀 乖乖听话", "🎈 放飞心情", "💎 你最珍贵", "💖 每秒想你", "🌻 像向日葵",
+        "🥤 多喝热水", "🐱 喵喵爱你", "🐶 忠诚于你", "🛸 漫游星际", "🍎 平平安安",
+        "🦋 破茧成蝶", "🎨 绘出精彩", "⛵ 一帆风顺", "🍦 凉爽一夏", "🧣 冬日暖阳",
+        "🚲 陪你散步", "📚 也要进步", "🎧 听听好歌", "🏖️ 享受生活", "🏠 温暖港湾",
+        "🥨 保持可爱", "🦒 挺起胸膛", "🦉 别熬夜了", "🍩 烦恼全消", "🎡 快乐转转",
+        "💌 给你写信", "🔮 梦想成真", "💄 也要美美", "👟 走遍世界", "🛶 划向未来",
+        "🍭 生活甜蜜", "🛸 带你飞行", "🕰️ 珍惜当下", "⛲ 喷涌幸福", "🏜️ 顽强生长",
+        "🌋 像火一样", "🏔️ 顶峰相见", "🌲 永葆青春", "🍊 大吉大利", "🥑 能量满满",
+        "🧀 芝士力量", "🎬 人生大片", "🎸 奏响欢歌", "🏀 活力十足", "🏹 中中心意",
+        "🧬 命中注定", "🧩 完美拼图", "🧨 快乐炸裂", "🕯️ 照亮前路", "🎐 聆听风声"
+    ];
+
+    const colors = [
+        '#FFEBEE', '#FCE4EC', '#F3E5F5', '#E8EAF6', '#E3F2FD', 
+        '#E0F2F1', '#F1F8E9', '#FFFDE7', '#FFF3E0', '#FBE9E7'
+    ];
+
+    let count = 0;
+    let maxCount = 70; 
+    let zIndexCounter = 100;
+    let notesArray = []; // 用来存储所有生成的便签
+
+    function startApp() {
+        document.getElementById('modal').style.display = 'none';
+        document.getElementById('center-wish').style.opacity = '1';
+        
+        const timer = setInterval(() => {
+            if (count >= maxCount) {
+                clearInterval(timer);
+                // 停止 0.02 秒后执行散开动作
+                setTimeout(scatterNotes, 20);
+                return;
+            }
+            createNote(count);
+            count++;
+        }, 200);
+    }
+
+    function getHeartPoint(t) {
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+        return { x, y };
+    }
+
+    function createNote(index) {
+        const note = document.createElement('div');
+        note.className = 'note';
+        note.innerHTML = messages[index % messages.length];
+        note.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        
+        const t = (index / maxCount) * 2 * Math.PI; 
+        const point = getHeartPoint(t);
+        
+        const scale = Math.min(window.innerWidth, window.innerHeight) / 35; 
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+
+        let posX = centerX + point.x * scale - 40; 
+        let posY = centerY + point.y * scale;
+
+        // 初始心形布局
+        note.style.left = posX + 'px';
+        note.style.top = posY + 'px';
+        note.style.zIndex = zIndexCounter++;
+
+        addDragListener(note);
+        document.getElementById('container').appendChild(note);
+        notesArray.push(note); // 放入数组方便后续操作
+    }
+
+    // 散开逻辑
+    function scatterNotes() {
+        notesArray.forEach((note) => {
+            // 随机计算全屏位置
+            const padding = 20;
+            const randomX = Math.random() * (window.innerWidth - note.offsetWidth - padding);
+            const randomY = Math.random() * (window.innerHeight - note.offsetHeight - padding);
+            
+            note.style.left = randomX + 'px';
+            note.style.top = randomY + 'px';
+            // 随机给一个轻微的角度旋转，让散开效果更自然
+            const randomRotate = (Math.random() - 0.5) * 20;
+            note.style.transform = `rotate(${randomRotate}deg)`;
+        });
+    }
+
+    function addDragListener(el) {
+        let offsetX, offsetY;
+        el.addEventListener('touchstart', function(e) {
+            el.style.zIndex = zIndexCounter++;
+            const touch = e.touches[0];
+            offsetX = touch.clientX - el.offsetLeft;
+            offsetY = touch.clientY - el.offsetTop;
+            // 拖拽时临时取消 transition，否则会有延迟感
+            el.style.transition = "none"; 
+        });
+
+        el.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            let newX = touch.clientX - offsetX;
+            let newY = touch.clientY - offsetY;
+
+            newX = Math.max(0, Math.min(newX, window.innerWidth - el.offsetWidth));
+            newY = Math.max(0, Math.min(newY, window.innerHeight - el.offsetHeight));
+
+            el.style.left = newX + 'px';
+            el.style.top = newY + 'px';
+        });
+
+        el.addEventListener('touchend', function() {
+            // 拖拽结束后恢复 transition（如果你希望之后还会有自动动画）
+            el.style.transition = "left 0.3s, top 0.3s, transform 0.5s";
+        });
+    }
+</script>
+
+</body>
+</html>
