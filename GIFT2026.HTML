@@ -142,7 +142,7 @@
             }
             createNote(count);
             count++;
-        }, 200);
+        }, 250);
     }
 
     function getHeartPoint(t) {
@@ -160,7 +160,7 @@
         const t = (index / maxCount) * 2 * Math.PI; 
         const point = getHeartPoint(t);
         
-        const scale = Math.min(window.innerWidth, window.innerHeight) / 35; 
+        const scale = Math.min(window.innerWidth, window.innerHeight) / 45; 
         const centerX = window.innerWidth / 2;
         const centerY = window.innerHeight / 2;
 
