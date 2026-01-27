@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 手势交互粒子星空</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #container { position: absolute; width: 100%; height: 100%; }
+        
+        /* 摄像头小窗口 */
+        #video-container {
+            position: absolute; bottom: 20px; left: 20px;
+            width: 180px; border-radius: 12px; overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.3); transform: scaleX(-1);
+        }
+        #webcam { width: 100%; height: auto; display: block; }
+
+        /* 右侧控制面板 */
+        .panel {
+            position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+            display: flex; flex-direction: column; gap: 10px;
+            background: rgba(0,0,0,0.5); padding: 20px; border-radius: 15px;
+            backdrop-filter: blur(10px); color: white;
+        }
+        button {
+            padding: 10px; border: none; border-radius: 8px; background: rgba(255,255,255,0.2);
+            color: white; cursor: pointer; transition: 0.3s;
+        }
+        button:hover { background: rgba(255,255,255,0.4); }
+        input[type="range"] { width: 100%; }
+
+        /* 全屏按钮 */
+        #fullscreen-btn { position: absolute; bottom: 20px; right: 20px; font-size: 24px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div id="container"></div>
+<div id="video-container"><video id="webcam" autoplay playsinline></video></div>
+
+<div class="panel">
+    <h3 style="margin:0 0 10px 0">模型预设</h3>
+    <button onclick="changeModel('nebula')">幻彩星云</button>
+    <button onclick="changeModel('fireworks')">盛大烟花</button>
+    <button onclick="changeModel('saturn')">土星光环</button>
+    <button onclick="changeModel('flower')">量子花朵</button>
+    <hr style="width:100%; border:0.5px solid rgba(255,255,255,0.2)">
+    <label>粒子颜色</label>
+    <input type="color" id="colorPicker" value="#00ffff">
+    <label>粒子密度</label>
+    <input type="range" id="densitySlider" min="1000" max="20000" value="8000">
+</div>
+
+<div id="fullscreen-btn" onclick="toggleFullScreen()">🔲</div>
+
+<script>
+/** --- 初始化 Three.js 场景 --- **/
+let scene, camera, renderer, particles, starField;
+let currentPreset = 'nebula';
+const clock = new THREE.Clock();
+
+function initThree() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.getElementById('container').appendChild(renderer.domElement);
+
+    // 创建背景深空粒子
+    createBackgroundStars();
+    // 创建初始主模型
+    createParticleModel();
+
+    animate();
+}
+
+// 随机背景星空
+function createBackgroundStars() {
+    const geo = new THREE.BufferGeometry();
+    const pos = [];
+    for(let i=0; i<5000; i++) {
+        pos.push((Math.random()-0.5)*100, (Math.random()-0.5)*100, (Math.random()-0.5)*100);
+    }
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({ size: 0.05, color: 0xffffff, transparent: true, opacity: 0.5 });
+    starField = new THREE.Points(geo, mat);
+    scene.add(starField);
+}
+
+/** --- 核心粒子逻辑 --- **/
+function createParticleModel() {
+    if(particles) scene.remove(particles);
+
+    const count = document.getElementById('densitySlider').value;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+
+    // 根据预设生成形状
+    for(let i=0; i<count; i++) {
+        let x, y, z;
+        if(currentPreset === 'nebula') {
+            x = (Math.random()-0.5)*4; y = (Math.random()-0.5)*4; z = (Math.random()-0.5)*4;
+        } else if(currentPreset === 'saturn') {
+            const r = 2 + Math.random()*1; const theta = Math.random()*Math.PI*2;
+            x = Math.cos(theta)*r; y = (Math.random()-0.5)*0.2; z = Math.sin(theta)*r;
+        } else {
+            // 默认球体
+            const u = Math.random(); const v = Math.random();
+            const theta = 2 * Math.PI * u; const phi = Math.acos(2 * v - 1);
+            x = 2 * Math.sin(phi) * Math.cos(theta);
+            y = 2 * Math.sin(phi) * Math.sin(theta);
+            z = 2 * Math.cos(phi);
+        }
+        positions.set([x, y, z], i * 3);
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    
+    // 自定义 Shader 实现辉光和色相偏移
+    const material = new THREE.PointsMaterial({
+        size: 0.08,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        map: createCircleTexture()
+    });
+
+    particles = new THREE.Points(geometry, material);
+    scene.add(particles);
+}
+
+// 生成圆点发光纹理
+function createCircleTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64; canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createRadialGradient(32,32,0, 32,32,32);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,64,64);
+    return new THREE.CanvasTexture(canvas);
+}
+
+/** --- MediaPipe 手势处理 --- **/
+const videoElement = document.getElementById('webcam');
+const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+
+hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+
+hands.onResults(results => {
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        
+        // 1. 手心位置控制旋转 (取中指根部坐标)
+        const handX = landmarks[9].x - 0.5;
+        const handY = landmarks[9].y - 0.5;
+        particles.rotation.y += handX * 0.1;
+        particles.rotation.x += handY * 0.1;
+
+        // 2. 抓取程度控制缩放 (食指尖与大拇指尖距离)
+        const dx = landmarks[8].x - landmarks[4].x;
+        const dy = landmarks[8].y - landmarks[4].y;
+        const distance = Math.sqrt(dx*dx + dy*dy);
+        const scale = THREE.MathUtils.mapLinear(distance, 0.05, 0.3, 0.5, 2.5);
+        particles.scale.set(scale, scale, scale);
+
+        // 3. 根据旋转角度改变颜色
+        const hue = (particles.rotation.y % (Math.PI * 2)) / (Math.PI * 2);
+        const baseColor = new THREE.Color(document.getElementById('colorPicker').value);
+        baseColor.offsetHSL(hue, 0, 0);
+        particles.material.color = baseColor;
+    }
+});
+
+const cameraUtils = new Camera(videoElement, {
+    onFrame: async () => { await hands.send({image: videoElement}); },
+    width: 480, height: 360
+});
+cameraUtils.start();
+
+/** --- 辅助功能 --- **/
+function animate() {
+    requestAnimationFrame(animate);
+    const time = clock.getElapsedTime();
+    if(particles) {
+        // 基础漂浮动画
+        particles.geometry.attributes.position.needsUpdate = true;
+        starField.rotation.y += 0.0005;
+    }
+    renderer.render(scene, camera);
+}
+
+function changeModel(type) {
+    currentPreset = type;
+    createParticleModel();
+}
+
+function toggleFullScreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+    } else {
+        document.exitFullscreen();
+    }
+}
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+document.getElementById('densitySlider').oninput = createParticleModel;
+
+initThree();
+</script>
+</body>
+</html>
